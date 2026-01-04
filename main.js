@@ -1,4 +1,34 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Theme Toggle
+    const themeToggle = document.getElementById('theme-toggle');
+    const html = document.documentElement;
+    const saveTheme = localStorage.getItem('theme');
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+    // Set initial theme
+    const currentTheme = saveTheme || systemTheme;
+    if (currentTheme === 'light') {
+        html.setAttribute('data-theme', 'light');
+        themeToggle.innerText = '☀️';
+    } else {
+        html.removeAttribute('data-theme');
+        themeToggle.innerText = '🌙';
+    }
+
+    if (themeToggle) {
+        themeToggle.addEventListener('click', () => {
+            if (html.hasAttribute('data-theme')) {
+                html.removeAttribute('data-theme');
+                localStorage.setItem('theme', 'dark');
+                themeToggle.innerText = '🌙';
+            } else {
+                html.setAttribute('data-theme', 'light');
+                localStorage.setItem('theme', 'light');
+                themeToggle.innerText = '☀️';
+            }
+        });
+    }
+
     // Scroll Animation Observer
     const observerOptions = {
         threshold: 0.1,
@@ -17,27 +47,74 @@ document.addEventListener('DOMContentLoaded', () => {
     const animatedElements = document.querySelectorAll('.fade-in-up, .fade-in-on-scroll');
     animatedElements.forEach(el => observer.observe(el));
 
-    // Form Handling
+    // Toast Function
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+
+        const icon = type === 'success' ? '✓' : '✕';
+
+        toast.innerHTML = `
+            <span class="toast-icon">${icon}</span>
+            <span>${message}</span>
+        `;
+
+        container.appendChild(toast);
+
+        // Remove after animation (5s total)
+        setTimeout(() => {
+            toast.remove();
+        }, 5000);
+    }
+
+    // Form Handling with Formspree
     const contactForm = document.getElementById('contactForm');
     if (contactForm) {
-        contactForm.addEventListener('submit', (e) => {
+        contactForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            // Simulation of sending
             const btn = contactForm.querySelector('button[type="submit"]');
             const originalText = btn.innerText;
+            const formData = new FormData(contactForm);
+
+            // IMPORTANT: Create a .env file with VITE_FORMSPREE_URL=https://formspree.io/f/YOUR_ID
+            const formspreeUrl = import.meta.env.VITE_FORMSPREE_URL || 'https://formspree.io/f/YOUR_FORM_ID';
 
             btn.innerText = 'Enviando...';
             btn.disabled = true;
 
-            setTimeout(() => {
-                alert('¡Mensaje enviado con éxito! Nos pondremos en contacto contigo pronto.');
-                contactForm.reset();
+            try {
+                const response = await fetch(formspreeUrl, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    showToast('¡Mensaje enviado correctamente!', 'success');
+                    contactForm.reset();
+                } else {
+                    const data = await response.json();
+                    if (data.errors) {
+                        showToast('Error: ' + data.errors.map(error => error.message).join(", "), 'error');
+                    } else {
+                        showToast('Hubo un problema al enviar el mensaje.', 'error');
+                    }
+                }
+            } catch (error) {
+                // If the URL is "YOUR_FORM_ID", it returns 404, we catch it here mostly
+                if (formspreeUrl.includes('YOUR_FORM_ID')) {
+                    showToast('Falta configurar el ID de Formspree en el código.', 'error');
+                } else {
+                    showToast('Error de conexión. Inténtalo de nuevo.', 'error');
+                }
+            } finally {
                 btn.innerText = originalText;
                 btn.disabled = false;
-
-                console.log('Form submission simulated');
-            }, 1500);
+            }
         });
     }
 
